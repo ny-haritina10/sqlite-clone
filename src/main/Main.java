@@ -1,10 +1,16 @@
 package main;
 
-import db.component.REPL;
+import db.core.REPL;
 
 public class Main {
     public static void main(String[] args) {
-        REPL console = new REPL();
-        console.run();
+        try {
+            REPL console = new REPL();
+            console.run();    
+        } 
+        
+        catch (Exception e) {
+            e.printStackTrace();
+        }
     }   
 }
