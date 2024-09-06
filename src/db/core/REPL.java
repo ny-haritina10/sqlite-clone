@@ -4,6 +4,7 @@ import db.compiler.MetaCommandHandler;
 import db.compiler.SQLCompiler;
 import db.components.InputBuffer;
 import db.components.Statement;
+import db.data.Table;
 
 /*
  * REPL : Read - Execute - Print - Loop
@@ -29,6 +30,9 @@ public class REPL {
 
     public void run() {
         try {
+
+            Table table = new Table();
+
             while (true) {
                 prompt();
                 inputBuffer.readInput();        // read user input
@@ -55,12 +59,13 @@ public class REPL {
                 }
 
                 // execute statement
-                virtualMachine.executeStatement(statement);
+                virtualMachine.executeStatement(statement, table);
             }
         } 
         
         catch (Exception e) {
-            System.err.println(e.getMessage());
+            e.printStackTrace();
+            //System.err.println(e.getMessage());
         }       
     }
 
