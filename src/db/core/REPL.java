@@ -1,10 +1,12 @@
 package db.core;
 
+import java.io.IOException;
+
 import db.compiler.MetaCommandHandler;
 import db.compiler.SQLCompiler;
 import db.components.InputBuffer;
 import db.components.Statement;
-import db.data.Table;
+import db.data.Database;
 
 /*
  * REPL : Read - Execute - Print - Loop
@@ -20,18 +22,24 @@ public class REPL {
     private MetaCommandHandler metaCommandHandler;
     private SQLCompiler sqlCompiler;
     private VirtualMachine virtualMachine;
+    private Database database;
 
-    public REPL() {
+    private String fileName;
+
+    public REPL(String fileName) {
         inputBuffer = new InputBuffer();
         metaCommandHandler = new MetaCommandHandler();
         sqlCompiler = new SQLCompiler();
         virtualMachine = new VirtualMachine();
+        database = new Database();
+
+        this.fileName = fileName;
     }
 
     public void run() {
         try {
 
-            Table table = new Table();
+            database.open(fileName);
 
             while (true) {
                 prompt();
@@ -59,17 +67,24 @@ public class REPL {
                 }
 
                 // execute statement
-                virtualMachine.executeStatement(statement, table);
+                virtualMachine.executeStatement(statement, database.getTable());
             }
         } 
         
         catch (Exception e) {
             e.printStackTrace();
-            //System.err.println(e.getMessage());
-        }       
+        } 
+        
+        finally {
+            try 
+            { database.close(); } 
+            
+            catch (IOException e) {
+                System.err.println("Error closing the table: " + e.getMessage());
+            }
+        }
     }
 
-    private void prompt() {
-        System.out.print("$sql-lite-clone > ");
-    }
+    private void prompt() 
+    { System.out.print("$sql-lite-clone > "); }
 }
