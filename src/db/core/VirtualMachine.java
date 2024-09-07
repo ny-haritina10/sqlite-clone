@@ -3,6 +3,7 @@ package db.core;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import db.components.Cursor;
 import db.components.Statement;
 import db.data.Row;
 import db.data.Table;
@@ -21,20 +22,18 @@ public class VirtualMachine {
             return false;
         }
 
-        /// Serialize the row to the correct page and byte offset
-        int rowNum = table.getNumRows();
-        int pageNum = rowNum / Table.ROWS_PER_PAGE;
-        int byteOffset = table.getByteOffset(rowNum);
+        Row rowToInsert = statement.getRowToInsert();
+        Cursor cursor = table.end();       // Get a cursor at the end of the table
 
-        ByteBuffer page = table.getPager().getPage(pageNum);
-        Row.serializeRow(statement.getRowToInsert(), page, byteOffset);
+        ByteBuffer page = table.cursorValue(cursor);
+        Row.serializeRow(rowToInsert, page, page.position());
 
         // Update the number of rows in the table
         table.setNumRows(table.getNumRows() + 1);
 
         // Flush the page to disk to persist changes
         try 
-        { table.getPager().flush(pageNum, Table.PAGE_SIZE); } 
+        { table.getPager().flush((table.getNumRows()) / Table.ROWS_PER_PAGE, Table.PAGE_SIZE); } 
         
         catch (Exception e) {
             System.err.println("Error while flushing page to disk: " + e.getMessage());
@@ -47,15 +46,15 @@ public class VirtualMachine {
     public static void executeSelect(Table table) 
         throws IOException
     {
-        for (int i = 0; i < table.getNumRows(); i++) {
-            int pageNum = i / Table.ROWS_PER_PAGE;
-            int byteOffset = table.getByteOffset(i);
-
-            ByteBuffer page = table.getPager().getPage(pageNum);
-            Row row = Row.deserializeRow(page, byteOffset);
+        Cursor cursor = table.start();      
+        while (!cursor.isEndOfTable()) {
+            ByteBuffer page = table.cursorValue(cursor);
+            Row row = Row.deserializeRow(page, page.position());
 
             if (row.id != 0)        // Assuming 0 is an invalid ID for your data
-            { row.printRow(); }        
+            { row.printRow(); }     
+            
+            cursor.advance();  // Move to the next row
         }
     }  
 

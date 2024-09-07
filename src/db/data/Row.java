@@ -34,9 +34,7 @@ public class Row {
 
     // Deserialize a row from the ByteBuffer page at the given byteOffset
     public static Row deserializeRow(ByteBuffer page, int byteOffset) {
-        // Set the position of the buffer to the byteOffset
-        page.position(byteOffset);
-
+        page.position(byteOffset);      // Set the position of the buffer to the byteOffset
         int id = page.getInt();
 
         byte[] usernameBytes = new byte[Table.COLUMN_USERNAME_SIZE];

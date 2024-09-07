@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import db.backend.Pager;
+import db.components.Cursor;
 
 /*
  * Handle the storage adn organization of rows
@@ -35,31 +36,42 @@ public class Table {
         this.numRows = (int) pager.getFileLength() / ROW_SIZE;
     }
 
-    // calculate the exact location of a row in a page
-    public ByteBuffer rowSlot(int rowNum) 
+    // get the exact location of a row in a page
+    // locate a specific row using a Cursor
+    public ByteBuffer cursorValue(Cursor cursor) 
         throws IOException 
     {
-        int pageNum = rowNum / ROWS_PER_PAGE;
-        ByteBuffer page = pager.getPage(pageNum);
-
-        int rowOffset = rowNum % ROWS_PER_PAGE;     // decalage of the row
+        int pageNum = cursor.getRowNum() / Table.ROWS_PER_PAGE;
+        ByteBuffer page = getPager().getPage(pageNum);
+        
+        int rowOffset = cursor.getRowNum() % Table.ROWS_PER_PAGE;
         int byteOffset = rowOffset * ROW_SIZE;
-
+        
         return (ByteBuffer) page.position(byteOffset);
     }
+    
 
     public void close() 
         throws IOException 
     {
         int fullPages = numRows / ROWS_PER_PAGE;
+
         for (int i = 0; i < fullPages; i++) {
-            if (pager.getPage(i) != null) {
-                pager.flush(i, Table.PAGE_SIZE);
-            }
+            if (pager.getPage(i) != null) 
+            { pager.flush(i, Table.PAGE_SIZE); }    // save data by flushing all pages
         }
 
         pager.close();
     }
+
+    // get a Cursor at the start of the current Table
+    public Cursor start() 
+    { return new Cursor(this, 0, getNumRows() == 0); }
+
+    // get a Cursor at the end of the cuurent Table
+    public Cursor end() 
+    { return new Cursor(this, getNumRows(), true); }
+
 
     public int getByteOffset(int rowNum) 
     { return (rowNum % ROWS_PER_PAGE) * ROW_SIZE; }
