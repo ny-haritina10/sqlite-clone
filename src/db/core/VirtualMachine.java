@@ -7,9 +7,10 @@ import db.components.Cursor;
 import db.components.Statement;
 import db.data.Row;
 import db.data.Table;
+import db.datastructure.BTree;
 
 /*
- * Will execute the statements
+ * Used to execute Statement
  */
 
 public class VirtualMachine {
@@ -18,10 +19,13 @@ public class VirtualMachine {
         throws IOException
     {
         Row rowToInsert = statement.getRowToInsert();
-        table.insert(rowToInsert);
+        BTree<Integer, Row> bTree = table.getBTree(); // Assume Table now has a BTree
+
+        // Insert into B-tree
+        bTree.insert(rowToInsert.getId(), rowToInsert);
         
-        // Flush changes to disk
-        table.getPager().flush(0, Table.PAGE_SIZE); // needs to be adjusted for B-Tree structure
+        // Save B-tree to disk
+        bTree.saveToDisk();
         
         return true;
     }
@@ -30,6 +34,7 @@ public class VirtualMachine {
         throws IOException
     {
         Cursor cursor = table.start();
+
         while (!cursor.isEndOfTable()) {
             ByteBuffer rowBuffer = table.cursorValue(cursor);
             if (rowBuffer != null) {
@@ -46,13 +51,13 @@ public class VirtualMachine {
         switch (statement.getType()) {
             case INSERT:
                 if (executeInsert(statement, table)) {
-                    System.out.println("Executed.");
+                    System.out.println("Insertion executed.");
                 }
                 break;
 
             case SELECT:
                 executeSelect(table);
-                System.out.println("Executed.");
+                System.out.println("Selection executed.");
                 break;
         }
     }

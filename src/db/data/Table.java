@@ -36,11 +36,13 @@ public class Table {
         throws IOException 
     {
         this.pager = new Pager(fileName);
-        this.bTree = new BTree<>(B_TREE_ORDER);
+        this.bTree = new BTree<>(B_TREE_ORDER, this.pager);
         loadBTreeFromDisk();    
     }
 
-    private void loadBTreeFromDisk() throws IOException {
+    private void loadBTreeFromDisk() 
+        throws IOException 
+    {
         long numPages = pager.getFileLength() / PAGE_SIZE;
 
         for (int i = 0; i < numPages; i++) {
@@ -74,10 +76,7 @@ public class Table {
 
     private void saveBTreeToDisk() 
         throws IOException 
-    {
-        // Implement a method to save the B-Tree structure to disk
-        // This could involve serializing the B-Tree nodes and writing them to pages
-    }
+    { bTree.saveToDisk(); }
 
     // get a Cursor at the start of the current Table
     public Cursor start() {

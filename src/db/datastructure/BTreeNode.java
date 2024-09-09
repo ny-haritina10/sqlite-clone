@@ -28,7 +28,6 @@ public class BTreeNode<K extends Comparable<K>, V> {
         this.size = 0;
     }
 
-    
     public void insertKey(K key, V value) {
         if (size == 0) {
             keys.add(key);

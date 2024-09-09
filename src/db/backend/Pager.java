@@ -25,7 +25,9 @@ public class Pager {
     private long fileLength;
     private ByteBuffer[] pages;
 
-    public Pager(String filename) throws IOException {
+    public Pager(String filename) 
+        throws IOException 
+    {
         this.file = new RandomAccessFile(filename, "rw");   // creating the file with read/write mode
         this.fileLength = file.length();
         this.pages = new ByteBuffer[Table.TABLE_MAX_PAGES];
