@@ -5,27 +5,36 @@ import db.data.Table;
 public class Cursor {
 
     private Table table;
-    private int rowNum;
+    private Integer currentKey;
     private boolean endOfTable;  // Indicates if the cursor is one past the last element.
 
-    public Cursor(Table table, int rowNum, boolean endOfTable) {
+    public Cursor(Table table, Integer currentKey, boolean endOfTable) {
         this.table = table;
-        this.rowNum = rowNum;
+        this.currentKey = currentKey;
         this.endOfTable = endOfTable;
     }
 
     // move the cursor
     public void advance() {
-        this.rowNum++;
-        if (this.rowNum >= table.getNumRows()) 
-        { this.endOfTable = true; }
+        if (currentKey == null || endOfTable) {
+            endOfTable = true;
+            return;
+        }
+
+        Integer nextKey = table.getBTree().getNextKey(currentKey);
+
+        if (nextKey == null) 
+        { endOfTable = true; } 
+        
+        else 
+        { currentKey = nextKey; }
     }
 
     public Table getTable() 
     { return table;}
 
-    public int getRowNum() 
-    { return rowNum;}
+    public Integer getCurrentKey() 
+    { return currentKey;}
 
     public boolean isEndOfTable() 
     { return endOfTable;}
