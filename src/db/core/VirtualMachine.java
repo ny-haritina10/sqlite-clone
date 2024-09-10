@@ -20,9 +20,7 @@ public class VirtualMachine {
         Row rowToInsert = statement.getRowToInsert();
         BTree<Integer, Row> bTree = table.getBTree(); 
 
-        bTree.insert(rowToInsert.getId(), rowToInsert);        
-        bTree.saveToDisk();
-        
+        bTree.insert(rowToInsert.getId(), rowToInsert);                
         return true;
     }
 

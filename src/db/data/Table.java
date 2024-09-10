@@ -26,38 +26,60 @@ public class Table {
     public static final int TABLE_MAX_PAGES = 100;
     public static final int TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
+    private static final int METADATA_PAGE = 0;
+
+
     public static final int B_TREE_ORDER = 4;       // default b-tree order
 
     private BTree<Integer, Row> bTree;
     private Pager pager;    
 
-    public Table(String fileName)
-        throws Exception 
-    {
+    public Table(String fileName) throws Exception {
         this.pager = new Pager(fileName);
-        this.bTree = new BTree<>(B_TREE_ORDER, this.pager);
+        loadMetadata();
 
-        if (pager.getFileLength() > 0) {
-            // Load existing B-tree
-            ByteBuffer metaPage = pager.getPage(0);
-            int savedOrder = metaPage.getInt(4);
-            if (savedOrder <= 0) {
-                savedOrder = B_TREE_ORDER; // Use default if saved order is invalid
-                System.out.println("Warning: Invalid saved order. Using default: " + B_TREE_ORDER);
-            }
-            this.bTree = new BTree<>(savedOrder, this.pager);
-            this.bTree.loadFromDisk();
-        } 
-        
-        else {
-            // Initialize new B-tree
+        if (this.bTree == null) {
             this.bTree = new BTree<>(B_TREE_ORDER, this.pager);
-            ByteBuffer metaPage = pager.getPage(0);
-            metaPage.putInt(0, -1);  // No root node yet
-            metaPage.putInt(4, B_TREE_ORDER);
-            pager.flush(0, 8);
         }
     }
+
+     private void loadMetadata() throws Exception {
+        ByteBuffer metadataBuffer = pager.getPage(METADATA_PAGE);
+        if (metadataBuffer.getInt(0) != 0) { // Check if rootPageNum is not 0
+            int rootPageNum = metadataBuffer.getInt(0);
+            int numNodes = metadataBuffer.getInt(Integer.BYTES);
+            this.bTree = new BTree<>(B_TREE_ORDER, this.pager, rootPageNum, numNodes);
+        }
+    }
+
+    private void saveMetadata() throws Exception {
+        ByteBuffer metadataBuffer = pager.getPage(METADATA_PAGE);
+        metadataBuffer.putLong(0, bTree.getRootPageNum());
+        metadataBuffer.putInt(Integer.BYTES, bTree.getNumNodes());
+        pager.writePage(METADATA_PAGE);
+    }
+
+    public void insert(Row row) throws Exception {
+        bTree.insert(row.id, row);
+        saveMetadata();
+    }
+
+    public Row search(int id) throws Exception {
+        return bTree.search(id);
+    }
+
+    public void delete(int id) throws Exception {
+        bTree.delete(id);
+        saveMetadata();
+    }
+
+    public void close() throws Exception {
+        if (pager != null) {
+            saveMetadata();
+            pager.close();
+        }
+    }
+
 
     public ByteBuffer cursorValue(Cursor cursor) 
         throws Exception 
@@ -71,22 +93,12 @@ public class Table {
         row.serializeRow(buffer);
         
         buffer.flip();
-
         return buffer;
-    }
-    
-    public void close() 
-        throws Exception 
-    {
-        if (bTree != null) 
-        { bTree.saveToDisk(); }
-
-        if (pager != null) 
-        { pager.close(); }
     }
 
     // get a Cursor at the start of the current Table
     public Cursor start() 
+        throws Exception
     {
         Integer minKey = bTree.getMinKey();
         if (minKey == null) 
@@ -96,7 +108,9 @@ public class Table {
     }
 
     // get a Cursor at the end of the cuurent Table
-    public Cursor end() {
+    public Cursor end() 
+        throws Exception
+    {
         Integer maxKey = bTree.getMaxKey();
         if (maxKey == null) 
         { return new Cursor(this, null, true); } // Empty tree 
@@ -106,15 +120,6 @@ public class Table {
 
     public int getByteOffset(int rowNum) 
     { return (rowNum % ROWS_PER_PAGE) * ROW_SIZE; }
-
-    public void insert(Row row) 
-    { bTree.insert(row.id, row); }
-
-    public Row search(int id) 
-    { return bTree.search(id); }
-
-    public void delete(int id) 
-    { bTree.delete(id); }
 
     public Pager getPager() 
     { return pager; }

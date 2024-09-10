@@ -15,7 +15,9 @@ public class Cursor {
     }
 
     // move the cursor
-    public void advance() {
+    public void advance() 
+        throws Exception
+    {
         if (currentKey == null || endOfTable) {
             endOfTable = true;
             return;
