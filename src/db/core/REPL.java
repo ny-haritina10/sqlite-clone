@@ -1,7 +1,5 @@
 package db.core;
 
-import java.io.IOException;
-
 import db.compiler.MetaCommandHandler;
 import db.compiler.SQLCompiler;
 import db.components.InputBuffer;
@@ -79,7 +77,7 @@ public class REPL {
             try 
             { database.close(); } 
             
-            catch (IOException e) {
+            catch (Exception e) {
                 System.err.println("Error closing the table: " + e.getMessage());
             }
         }

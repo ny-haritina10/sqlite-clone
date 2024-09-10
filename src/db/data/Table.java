@@ -1,6 +1,5 @@
 package db.data;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import db.backend.Pager;
@@ -33,29 +32,35 @@ public class Table {
     private Pager pager;    
 
     public Table(String fileName)
-        throws IOException 
+        throws Exception 
     {
         this.pager = new Pager(fileName);
         this.bTree = new BTree<>(B_TREE_ORDER, this.pager);
-        loadBTreeFromDisk();    
-    }
 
-    private void loadBTreeFromDisk() 
-        throws IOException 
-    {
-        long numPages = pager.getFileLength() / PAGE_SIZE;
-
-        for (int i = 0; i < numPages; i++) {
-            ByteBuffer page = pager.getPage(i);
-            while (page.hasRemaining()) {
-                Row row = Row.deserializeRow(page, page.position());
-                bTree.insert(row.id, row);
+        if (pager.getFileLength() > 0) {
+            // Load existing B-tree
+            ByteBuffer metaPage = pager.getPage(0);
+            int savedOrder = metaPage.getInt(4);
+            if (savedOrder <= 0) {
+                savedOrder = B_TREE_ORDER; // Use default if saved order is invalid
+                System.out.println("Warning: Invalid saved order. Using default: " + B_TREE_ORDER);
             }
+            this.bTree = new BTree<>(savedOrder, this.pager);
+            this.bTree.loadFromDisk();
+        } 
+        
+        else {
+            // Initialize new B-tree
+            this.bTree = new BTree<>(B_TREE_ORDER, this.pager);
+            ByteBuffer metaPage = pager.getPage(0);
+            metaPage.putInt(0, -1);  // No root node yet
+            metaPage.putInt(4, B_TREE_ORDER);
+            pager.flush(0, 8);
         }
     }
 
     public ByteBuffer cursorValue(Cursor cursor) 
-        throws IOException 
+        throws Exception 
     {
         Row row = bTree.search(cursor.getCurrentKey());
 
@@ -63,23 +68,26 @@ public class Table {
         { return null; }
 
         ByteBuffer buffer = ByteBuffer.allocate(ROW_SIZE);
-        Row.serializeRow(row, buffer, 0);
+        row.serializeRow(buffer);
+        
         buffer.flip();
 
         return buffer;
     }
     
-    public void close() throws IOException {
-        saveBTreeToDisk();
-        pager.close();
+    public void close() 
+        throws Exception 
+    {
+        if (bTree != null) 
+        { bTree.saveToDisk(); }
+
+        if (pager != null) 
+        { pager.close(); }
     }
 
-    private void saveBTreeToDisk() 
-        throws IOException 
-    { bTree.saveToDisk(); }
-
     // get a Cursor at the start of the current Table
-    public Cursor start() {
+    public Cursor start() 
+    {
         Integer minKey = bTree.getMinKey();
         if (minKey == null) 
         { return new Cursor(this, null, true); } // Empty tree 

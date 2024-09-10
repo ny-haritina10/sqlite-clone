@@ -2,7 +2,6 @@ package db.data;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 
 public class Row {
 
@@ -16,33 +15,31 @@ public class Row {
         this.email = email;
     }
 
-    // Serialize the row into the ByteBuffer page at the given byteOffset
-    public static void serializeRow(Row row, ByteBuffer page, int byteOffset) {
-        // Set the position of the buffer to the byteOffset
-        page.position(byteOffset);
+    public void serializeRow(ByteBuffer buffer) {
+        buffer.putInt(id);
 
-        // Serialize id, username, and email
-        page.putInt(row.id);
+        byte[] usernameBytes = username.getBytes(StandardCharsets.UTF_8);
+        buffer.put(usernameBytes);
+        buffer.put(new byte[Table.COLUMN_USERNAME_SIZE - usernameBytes.length]); // Padding
 
-        byte[] usernameBytes = row.username.getBytes(StandardCharsets.UTF_8);
-        byte[] emailBytes = row.email.getBytes(StandardCharsets.UTF_8);
-
-        // Write username and email with padding
-        page.put(Arrays.copyOf(usernameBytes, Table.COLUMN_USERNAME_SIZE));
-        page.put(Arrays.copyOf(emailBytes, Table.COLUMN_EMAIL_SIZE));
+        byte[] emailBytes = email.getBytes(StandardCharsets.UTF_8);
+        buffer.put(emailBytes);
+        buffer.put(new byte[Table.COLUMN_EMAIL_SIZE - emailBytes.length]); // Padding
     }
 
-    // Deserialize a row from the ByteBuffer page at the given byteOffset
-    public static Row deserializeRow(ByteBuffer page, int byteOffset) {
-        page.position(byteOffset);      // Set the position of the buffer to the byteOffset
-        int id = page.getInt();
+    public static Row deserializeRow(ByteBuffer buffer) {
+        // Not enough data in the buffer for a complete row
+        if (buffer.remaining() < Table.ROW_SIZE) 
+        { return null; }
+
+        int id = buffer.getInt();
 
         byte[] usernameBytes = new byte[Table.COLUMN_USERNAME_SIZE];
-        page.get(usernameBytes);
+        buffer.get(usernameBytes);
         String username = new String(usernameBytes, StandardCharsets.UTF_8).trim();
 
         byte[] emailBytes = new byte[Table.COLUMN_EMAIL_SIZE];
-        page.get(emailBytes);
+        buffer.get(emailBytes);
         String email = new String(emailBytes, StandardCharsets.UTF_8).trim();
 
         return new Row(id, username, email);

@@ -21,9 +21,13 @@ public class BTreeNode<K extends Comparable<K>, V> {
 
     public BTreeNode(int order) {
         this.order = order;
-        this.keys = new ArrayList<>(order - 1);
-        this.values = new ArrayList<>(order - 1);
-        this.children = new ArrayList<>(order);
+
+        // Ensure order is always positive
+        int capacity = Math.max(order, 1);
+
+        this.keys = new ArrayList<>(capacity);
+        this.values = new ArrayList<>(capacity);
+        this.children = new ArrayList<>(capacity + 1);
         this.isLeaf = true;
         this.size = 0;
     }

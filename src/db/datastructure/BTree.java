@@ -1,6 +1,5 @@
 package db.datastructure;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import db.backend.Pager;
@@ -17,11 +16,15 @@ public class BTree<K extends Comparable<K>, V> {
     private Pager pager;
 
     public BTree(int order, Pager pager) {
-        this.order = order;
+        this.order = Math.max(order, 2); // Ensure minimum order of 2
         this.root = new BTreeNode<>(order);
         this.pager = pager;
     }
 
+    // -------------------------------------
+    // B-Tree data structures implementation
+    // -------------------------------------
+    
     public V search(K key) 
     { return searchInNode(root, key); }
 
@@ -57,25 +60,31 @@ public class BTree<K extends Comparable<K>, V> {
         { insertNonFull(r, key, value); }
     }
 
-    private void insertNonFull(BTreeNode<K, V> x, K key, V value) {
-        int i = x.getSize() - 1;
-        if (x.isLeaf()) 
-        { x.insertKey(key, value); } 
+    private void insertNonFull(BTreeNode<K, V> node, K key, V value) {
+        int i = node.getSize() - 1;
+        if (node.isLeaf()) 
+        { node.insertKey(key, value); } 
         
         else {
-            while (i >= 0 && key.compareTo(x.getKey(i)) < 0) 
+            while (i >= 0 && key.compareTo(node.getKey(i)) < 0) 
             { i--; }
 
             i++;
-            BTreeNode<K, V> child = x.getChild(i);
-            if (child.isFull()) {
-                splitChild(x, i);
+            BTreeNode<K, V> child = node.getChild(i);
 
-                if (key.compareTo(x.getKey(i)) > 0) 
+            if (child == null) {
+                child = new BTreeNode<>(order);
+                node.insertChild(i, child);
+            }
+
+            if (child.isFull()) {
+                splitChild(node, i);
+
+                if (key.compareTo(node.getKey(i)) > 0) 
                 { i++; }
             }
 
-            insertNonFull(x.getChild(i), key, value);
+            insertNonFull(node.getChild(i), key, value);
         }
     }
 
@@ -300,29 +309,45 @@ public class BTree<K extends Comparable<K>, V> {
         }
     }
 
-    public void saveToDisk() 
-        throws IOException 
-    {
-        if (root == null) 
-        { return; }
-        
-        // Start with the root node
-        int rootPageNum = saveNodeToDisk(root, -1);
-        
-        // Save the root page number and order to a known location (e.g., page 0)
-        ByteBuffer metaPage = pager.getPage(0);
+    // ------------------------
+    // Writing B-Tree into Disk 
+    // ------------------------
 
-        metaPage.putInt(0, rootPageNum);
-        metaPage.putInt(4, order);
-        pager.flush(0, 8);
+    public void saveToDisk() 
+        throws Exception 
+    {
+        if (root == null) { 
+            // Handle empty tree case
+            ByteBuffer metaPage = pager.getPage(0);
+            metaPage.putInt(0, -1); 
+            metaPage.putInt(4, order);
+
+            pager.flush(0, 8);
+        }
+        
+        else {
+            // Start with the root node
+            int rootPageNum = saveNodeToDisk(root, -1);
+                    
+            // Save the root page number and order to a known location (e.g., page 0)
+            ByteBuffer metaPage = pager.getPage(0);
+
+            metaPage.putInt(0, rootPageNum);
+            metaPage.putInt(4, order);
+            pager.flush(0, 8);
+        }
+        
+        pager.getFile().getFD().sync();
     }
 
     private int saveNodeToDisk(BTreeNode<K, V> node, int parentPageNum) 
-        throws IOException 
+        throws Exception 
     {
+        if (node == null)
+        { return -1; }      // indicates null node
+
         // Serialize the node
         ByteBuffer serializedNode = serializeNode(node);
-        
         int pageNum = findAvailablePage();
         
         // Write the serialized node to the page
@@ -339,7 +364,6 @@ public class BTree<K extends Comparable<K>, V> {
         if (!node.isLeaf()) {
             for (int i = 0; i <= node.getSize(); i++) {
                 int childPageNum = saveNodeToDisk(node.getChild(i), pageNum);
-                // Update the child pointer in the current node
                 updateChildPointer(pageNum, i, childPageNum);
             }
         }
@@ -353,14 +377,15 @@ public class BTree<K extends Comparable<K>, V> {
         buffer.put((byte) (node.isLeaf() ? 1 : 0));
         
         for (int i = 0; i < node.getSize(); i++) {
-            serializeKey(buffer, node.getKey(i));
-            serializeValue(buffer, node.getValue(i));
+            K key = node.getKey(i);
+            V value = node.getValue(i);
+
+            serializeKeyValue(buffer, key, value);
         }
 
         if (!node.isLeaf()) {
-            for (int i = 0; i <= node.getSize(); i++) {
-                // We'll update child pointers later, so just reserve space for now
-                buffer.putInt(-1);
+           for (int i = 0; i <= node.getSize(); i++) {
+                buffer.putInt(node.getChild(i) != null ? i : -1);
             }
         }
 
@@ -368,16 +393,13 @@ public class BTree<K extends Comparable<K>, V> {
         return buffer;
     }
 
-    private void serializeKey(ByteBuffer buffer, K key) 
-    { buffer.putInt((Integer) key); }
-
-    private void serializeValue(ByteBuffer buffer, V value) {
-        Row valueRow = (Row) value;
-        Row.serializeRow(valueRow, buffer, buffer.position());
+    private void serializeKeyValue(ByteBuffer buffer, K key, V value) {
+        buffer.putInt((Integer) key);
+        ((Row) value).serializeRow(buffer);
     }
 
     private void updateParentChildPointer(int parentPageNum, K key, int childPageNum) 
-        throws IOException 
+        throws Exception 
     {
         ByteBuffer parentPage = pager.getPage(parentPageNum);
         BTreeNode<K, V> parentNode = deserializeNode(parentPage);
@@ -387,7 +409,7 @@ public class BTree<K extends Comparable<K>, V> {
     }
 
     private void updateChildPointer(int pageNum, int childIndex, int childPageNum) 
-        throws IOException 
+        throws Exception 
     {
         ByteBuffer page = pager.getPage(pageNum);
         int size = page.getInt(0);
@@ -399,42 +421,33 @@ public class BTree<K extends Comparable<K>, V> {
         pager.flush(pageNum, Table.PAGE_SIZE);
     }
 
-    private BTreeNode<K, V> deserializeNode(ByteBuffer buffer) {
+    @SuppressWarnings("unchecked")
+    private BTreeNode<K, V> deserializeNode(ByteBuffer buffer) 
+        throws Exception
+    {
         int size = buffer.getInt();
         boolean isLeaf = buffer.get() != 0;
-        BTreeNode<K, V> node = new BTreeNode<>(order);
+        BTreeNode<K, V> node = new BTreeNode<>(this.order);
         node.setLeaf(isLeaf);
 
         for (int i = 0; i < size; i++) {
-            K key = deserializeKey(buffer);
-            V value = deserializeValue(buffer);
-
+            K key = (K) Integer.valueOf(buffer.getInt());
+            V value = (V) Row.deserializeRow(buffer);
             node.insertKey(key, value);
         }
 
         if (!isLeaf) {
             for (int i = 0; i <= size; i++) {
-                // We'll load child nodes on-demand, so just add null placeholders
-                node.insertChild(i, null);
+                int childPageNum = buffer.getInt();
+                if (childPageNum != -1) {
+                    node.insertChild(i, loadNodeFromDisk(childPageNum));
+                }
             }
         }
 
         return node;
     }
-
-    @SuppressWarnings("unchecked")
-    private K deserializeKey(ByteBuffer buffer) 
-    { return (K) (Integer) buffer.getInt(); }          // Assuming K is always Integer, we can cast it
-
-    @SuppressWarnings("unchecked")
-    private V deserializeValue(ByteBuffer buffer) {
-        int length = buffer.getInt();
-        byte[] bytes = new byte[length];
-        buffer.get(bytes);
-
-        return (V) new String(bytes);
-    }
-
+    
     private int findChildIndex(BTreeNode<K, V> node, K key) {
         int i = 0;
         while (i < node.getSize() && key.compareTo(node.getKey(i)) > 0) 
@@ -444,11 +457,47 @@ public class BTree<K extends Comparable<K>, V> {
     }
 
     private int findAvailablePage() 
-        throws IOException 
+        throws Exception 
     {
         // Implement logic to find an available page
         // This could involve maintaining a free list or simply appending to the end of the file
         // For simplicity, let's just append to the end of the file
         return (int) (pager.getFileLength() / Table.PAGE_SIZE);
+    }
+
+    public void loadFromDisk() 
+        throws Exception 
+    {
+        ByteBuffer metaPage = pager.getPage(0);
+        int rootPageNum = metaPage.getInt(0);
+        int savedOrder = metaPage.getInt(4);
+
+        System.out.println("Saved order: " + savedOrder);
+        System.out.println("Current order: " + this.order);
+            
+        if (savedOrder <= 0) {
+            throw new IllegalStateException("Invalid saved B-tree order: " + savedOrder);
+        }
+
+        if (savedOrder != this.order) {
+            throw new IllegalStateException("Saved B-tree order (" + savedOrder + ") does not match current order (" + this.order + ")");
+        }
+        
+        if (rootPageNum == -1) {
+            this.root = new BTreeNode<>(order);
+        } else {
+            this.root = loadNodeFromDisk(rootPageNum);
+        }
+    }
+
+    private BTreeNode<K, V> loadNodeFromDisk(int pageNum) 
+        throws Exception 
+    {
+        if (pageNum == -1) {
+            return null;
+        }
+
+        ByteBuffer page = pager.getPage(pageNum);
+        return deserializeNode(page);
     }
 }

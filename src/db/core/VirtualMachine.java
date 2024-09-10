@@ -1,6 +1,5 @@
 package db.core;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import db.components.Cursor;
@@ -16,48 +15,49 @@ import db.datastructure.BTree;
 public class VirtualMachine {
 
     public static boolean executeInsert(Statement statement, Table table) 
-        throws IOException
+        throws Exception
     {
         Row rowToInsert = statement.getRowToInsert();
-        BTree<Integer, Row> bTree = table.getBTree(); // Assume Table now has a BTree
+        BTree<Integer, Row> bTree = table.getBTree(); 
 
-        // Insert into B-tree
-        bTree.insert(rowToInsert.getId(), rowToInsert);
-        
-        // Save B-tree to disk
+        bTree.insert(rowToInsert.getId(), rowToInsert);        
         bTree.saveToDisk();
         
         return true;
     }
 
     public static void executeSelect(Table table) 
-        throws IOException
+        throws Exception
     {
         Cursor cursor = table.start();
+
+        if (cursor.getCurrentKey() == null)
+        { throw new Exception("Table is empty !"); }
 
         while (!cursor.isEndOfTable()) {
             ByteBuffer rowBuffer = table.cursorValue(cursor);
             if (rowBuffer != null) {
-                Row row = Row.deserializeRow(rowBuffer, 0);
+                Row row = Row.deserializeRow(rowBuffer);
                 row.printRow();
             }
+            
             cursor.advance();
         }
     }  
 
     public void executeStatement(Statement statement, Table table) 
-        throws IOException
+        throws Exception
     {
         switch (statement.getType()) {
             case INSERT:
                 if (executeInsert(statement, table)) {
-                    System.out.println("Insertion executed.");
+                    System.out.println("Insertion executed !");
                 }
                 break;
 
             case SELECT:
                 executeSelect(table);
-                System.out.println("Selection executed.");
+                System.out.println("Selection executed !");
                 break;
         }
     }
