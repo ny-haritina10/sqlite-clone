@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import db.backend.Pager;
 import db.components.Cursor;
 import db.datastructure.BTree;
+import db.datastructure.BTreeNode;
 
 /*
  * Handle the storage adn organization of rows
@@ -43,15 +44,45 @@ public class Table {
     private void loadBTreeFromDisk() 
         throws IOException 
     {
-        long numPages = pager.getFileLength() / PAGE_SIZE;
+        // long numPages = pager.getFileLength() / PAGE_SIZE;
 
-        for (int i = 0; i < numPages; i++) {
-            ByteBuffer page = pager.getPage(i);
-            while (page.hasRemaining()) {
-                Row row = Row.deserializeRow(page, page.position());
-                bTree.insert(row.id, row);
+        // for (int i = 0; i < numPages; i++) {
+        //     ByteBuffer page = pager.getPage(i);
+        //     while (page.hasRemaining()) {
+        //         Row row = Row.deserializeRow(page, page.position());
+        //         bTree.insert(row.id, row);
+        //     }
+        // }
+
+        ByteBuffer metaPage = pager.getPage(0);
+        int rootPageNum = metaPage.getInt(0);
+        int order = metaPage.getInt(4);
+        
+        // Ensure order is valid
+        if (order <= 0) {
+            order = B_TREE_ORDER; // Use default order if the stored value is invalid
+        }
+        
+        this.bTree = new BTree<>(order, this.pager);
+        if (rootPageNum > 0) {
+            this.bTree.setRoot(loadNodeFromDisk(rootPageNum));
+        }
+    }
+
+    private BTreeNode<Integer, Row> loadNodeFromDisk(int pageNum) throws IOException {
+        ByteBuffer nodePage = pager.getPage(pageNum);
+        BTreeNode<Integer, Row> node = this.bTree.deserializeNode(nodePage);
+        
+        if (!node.isLeaf()) {
+            for (int i = 0; i <= node.getSize(); i++) {
+                int childPageNum = nodePage.getInt(/* calculate offset for child pointer */);
+                if (childPageNum != -1) {
+                    node.insertChild(i, loadNodeFromDisk(childPageNum));
+                }
             }
         }
+        
+        return node;
     }
 
     public ByteBuffer cursorValue(Cursor cursor) 

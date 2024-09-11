@@ -20,7 +20,7 @@ public class BTreeNode<K extends Comparable<K>, V> {
     private int size;           // number of cuurently keys in the node
 
     public BTreeNode(int order) {
-        this.order = order;
+        this.order = Math.max(2, order); // Ensure order is at least 2
         this.keys = new ArrayList<>(order - 1);
         this.values = new ArrayList<>(order - 1);
         this.children = new ArrayList<>(order);

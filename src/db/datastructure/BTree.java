@@ -17,8 +17,8 @@ public class BTree<K extends Comparable<K>, V> {
     private Pager pager;
 
     public BTree(int order, Pager pager) {
-        this.order = order;
-        this.root = new BTreeNode<>(order);
+        this.order = Math.max(2, order); // Ensure order is at least 2
+        this.root = null; // Initialize root as null
         this.pager = pager;
     }
 
@@ -40,6 +40,12 @@ public class BTree<K extends Comparable<K>, V> {
     }
 
     public void insert(K key, V value) {
+        if (root == null) {
+            root = new BTreeNode<>(order);
+            root.insertKey(key, value);
+            return;
+        }
+
         BTreeNode<K, V> r = root;
 
         if (r.isFull()) {
@@ -399,7 +405,7 @@ public class BTree<K extends Comparable<K>, V> {
         pager.flush(pageNum, Table.PAGE_SIZE);
     }
 
-    private BTreeNode<K, V> deserializeNode(ByteBuffer buffer) {
+    public BTreeNode<K, V> deserializeNode(ByteBuffer buffer) {
         int size = buffer.getInt();
         boolean isLeaf = buffer.get() != 0;
         BTreeNode<K, V> node = new BTreeNode<>(order);
@@ -450,5 +456,12 @@ public class BTree<K extends Comparable<K>, V> {
         // This could involve maintaining a free list or simply appending to the end of the file
         // For simplicity, let's just append to the end of the file
         return (int) (pager.getFileLength() / Table.PAGE_SIZE);
+    }
+
+    public void setRoot(BTreeNode<K, V> root) 
+    { this.root = root; }
+
+    public void createNewRoot() {
+        this.root = new BTreeNode<>(order);
     }
 }
