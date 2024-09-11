@@ -39,15 +39,34 @@ public class BTree<K extends Comparable<K>, V> {
 
     private void writeNode(BTreeNode<K, V> node) throws Exception {
         ByteBuffer page = pager.getPage((int) node.getPageNumber());
-        page.put(node.serialize());
+        page.clear(); // Clear the buffer before writing
+        
+        byte[] serializedNode = node.serialize();
+        page.put(serializedNode);
         pager.writePage((int) node.getPageNumber());
     }
 
     private BTreeNode<K, V> readNode(long pageNum) throws Exception {
         ByteBuffer page = pager.getPage((int) pageNum);
         byte[] data = new byte[page.capacity()];
+        page.rewind(); // Reset the buffer position to the beginning
         page.get(data);
+        
+        // Check if the page is empty (newly allocated)
+        if (isEmptyPage(data)) {
+            return new BTreeNode<>(order, pageNum);
+        }
+        
         return BTreeNode.deserialize(data);
+    }
+
+    private boolean isEmptyPage(byte[] data) {
+        for (byte b : data) {
+            if (b != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public V search(K key) throws Exception {

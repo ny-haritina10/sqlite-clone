@@ -4,7 +4,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import db.backend.Pager;
 import db.data.Row;
+import db.data.Table;
 
 /*
  * Represents a Node in the BTree DS
@@ -98,26 +100,30 @@ public class BTreeNode<K extends Comparable<K>, V> {
     { return childrenPageNumbers.get(index); }
 
     public byte[] serialize() {
-        ByteBuffer buffer = ByteBuffer.allocate(calculateSerializedSize());
-        
-        buffer.putInt(order);
-        buffer.putInt(size);
-        buffer.put((byte) (isLeaf ? 1 : 0));
-        buffer.putLong(pageNumber);
+        ByteBuffer buffer = ByteBuffer.allocate(Table.PAGE_SIZE);
 
-        for (int i = 0; i < size; i++) {
-            serializeKey(buffer, keys.get(i));
-            serializeValue(buffer, values.get(i));
+         for (int i = 0; i < order - 1; i++) {
+            if (i < size) {
+                serializeKey(buffer, keys.get(i));
+                serializeValue(buffer, values.get(i));
+            } else {
+                // Write placeholder data for empty slots
+                serializeKey(buffer, null);
+                serializeValue(buffer, null);
+            }
         }
 
-        for (int i = 0; i <= size; i++) {
-            if (!isLeaf) {
+        for (int i = 0; i < order; i++) {
+            if (i < childrenPageNumbers.size()) {
                 buffer.putLong(childrenPageNumbers.get(i));
+            } else {
+                buffer.putLong(0); // Placeholder for empty child pointers
             }
         }
 
         return buffer.array();
     }
+
 
     public static <K extends Comparable<K>, V> BTreeNode<K, V> deserialize(byte[] data) {
         ByteBuffer buffer = ByteBuffer.wrap(data);
@@ -129,18 +135,23 @@ public class BTreeNode<K extends Comparable<K>, V> {
         BTreeNode<K, V> node = new BTreeNode<>(order, pageNumber);
         node.size = size;
         node.isLeaf = isLeaf;
+        node.pageNumber = pageNumber;
 
-        for (int i = 0; i < size; i++) {
+        for (int i = 0; i < node.order - 1; i++) {
             K key = deserializeKey(buffer);
             V value = deserializeValue(buffer);
-            node.keys.add(key);
-            node.values.add(value);
+            if (key != null && value != null) {
+                node.keys.add(key);
+                node.values.add(value);
+            }
         }
 
         if (!isLeaf) {
-            for (int i = 0; i <= size; i++) {
+            for (int i = 0; i < node.order; i++) {
                 long childPageNumber = buffer.getLong();
-                node.childrenPageNumbers.add(childPageNumber);
+                if (childPageNumber != 0) {
+                    node.childrenPageNumbers.add(childPageNumber);
+                }
             }
         }
 
@@ -156,13 +167,17 @@ public class BTreeNode<K extends Comparable<K>, V> {
         return size;
     }
 
-    private void serializeKey(ByteBuffer buffer, K key) 
-    { buffer.putInt((Integer) key); }
+    private void serializeKey(ByteBuffer buffer, K key) {
+        if (key != null) 
+        { buffer.putInt((Integer) key); } 
+    }
 
     private void serializeValue(ByteBuffer buffer, V value) {
-        buffer.putInt(((Row) value).getId());
-        buffer.put(((Row) value).getUsername().getBytes());
-        buffer.put(((Row) value).getEmail().getBytes());
+        if (value != null) { 
+            buffer.putInt(((Row) value).getId());
+            buffer.put(((Row) value).getUsername().getBytes());
+            buffer.put(((Row) value).getEmail().getBytes());
+        }
     }
 
     @SuppressWarnings("unchecked")

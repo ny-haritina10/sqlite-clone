@@ -31,7 +31,7 @@ public class REPL {
         virtualMachine = new VirtualMachine();
         database = new Database();
 
-        this.fileName = fileName;
+        this.fileName = "D:\\Studies\\ITU\\S5\\INF - Side Project\\sqlite-clone\\datafile\\" + fileName;
     }
 
     public void run() {
