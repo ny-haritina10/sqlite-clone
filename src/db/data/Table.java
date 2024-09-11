@@ -38,46 +38,54 @@ public class Table {
     {
         this.pager = new Pager(fileName);
         this.bTree = new BTree<>(B_TREE_ORDER, this.pager);
+
         loadBTreeFromDisk();    
     }
 
-    private void loadBTreeFromDisk() 
-        throws IOException 
-    {
-        // long numPages = pager.getFileLength() / PAGE_SIZE;
-
-        // for (int i = 0; i < numPages; i++) {
-        //     ByteBuffer page = pager.getPage(i);
-        //     while (page.hasRemaining()) {
-        //         Row row = Row.deserializeRow(page, page.position());
-        //         bTree.insert(row.id, row);
-        //     }
-        // }
-
+    
+    private void loadBTreeFromDisk() throws IOException {
+        System.out.println("Loading B-Tree from disk");
         ByteBuffer metaPage = pager.getPage(0);
         int rootPageNum = metaPage.getInt(0);
         int order = metaPage.getInt(4);
         
+        System.out.println("Meta page content: rootPageNum=" + rootPageNum + ", order=" + order);
+        
         // Ensure order is valid
         if (order <= 0) {
             order = B_TREE_ORDER; // Use default order if the stored value is invalid
+            System.out.println("Invalid order, using default: " + order);
         }
         
         this.bTree = new BTree<>(order, this.pager);
         if (rootPageNum > 0) {
-            this.bTree.setRoot(loadNodeFromDisk(rootPageNum));
+            System.out.println("Loading root node from page " + rootPageNum);
+            BTreeNode<Integer, Row> root = loadNodeFromDisk(rootPageNum);
+            this.bTree.setRoot(root);
+            System.out.println("Root node loaded. Size: " + root.getSize() + ", Is leaf: " + root.isLeaf());
+        } else {
+            System.out.println("No root node found (rootPageNum <= 0), creating new root");
+            this.bTree.createNewRoot();
         }
+        System.out.println("B-Tree loading complete");
     }
-
+    
     private BTreeNode<Integer, Row> loadNodeFromDisk(int pageNum) throws IOException {
+        System.out.println("Loading node from page " + pageNum);
         ByteBuffer nodePage = pager.getPage(pageNum);
         BTreeNode<Integer, Row> node = this.bTree.deserializeNode(nodePage);
         
+        System.out.println("Node deserialized. Size: " + node.getSize() + ", Is leaf: " + node.isLeaf());
+        
         if (!node.isLeaf()) {
+            int childrenOffset = 5 + (node.getSize() * (Table.ROW_SIZE + Integer.BYTES));
             for (int i = 0; i <= node.getSize(); i++) {
-                int childPageNum = nodePage.getInt(/* calculate offset for child pointer */);
+                int childPageNum = nodePage.getInt(childrenOffset + (i * Integer.BYTES));
+                System.out.println("Child " + i + " page number: " + childPageNum);
                 if (childPageNum != -1) {
-                    node.insertChild(i, loadNodeFromDisk(childPageNum));
+                    BTreeNode<Integer, Row> childNode = loadNodeFromDisk(childPageNum);
+                    node.insertChild(i, childNode);
+                    System.out.println("Inserted child " + i + ". Size: " + childNode.getSize() + ", Is leaf: " + childNode.isLeaf());
                 }
             }
         }
@@ -101,20 +109,27 @@ public class Table {
     }
     
     public void close() throws IOException {
+        System.out.println("Closing table and saving B-Tree to disk");
         saveBTreeToDisk();
+        bTree.saveToDisk();
         pager.close();
+        System.out.println("Table closed and B-Tree saved");
     }
 
-    private void saveBTreeToDisk() 
+    public void saveBTreeToDisk() 
         throws IOException 
     { bTree.saveToDisk(); }
 
     // get a Cursor at the start of the current Table
     public Cursor start() {
+        System.out.println("Starting cursor creation");
         Integer minKey = bTree.getMinKey();
-        if (minKey == null) 
-        { return new Cursor(this, null, true); } // Empty tree 
-        
+        System.out.println("Minimum key in B-Tree: " + minKey);
+        if (minKey == null) {
+            System.out.println("B-Tree is empty, returning end-of-table cursor");
+            return new Cursor(this, null, true); // Empty tree 
+        }
+        System.out.println("Returning cursor with minimum key: " + minKey);
         return new Cursor(this, minKey, false);
     }
 

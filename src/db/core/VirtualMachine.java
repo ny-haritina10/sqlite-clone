@@ -15,35 +15,50 @@ import db.datastructure.BTree;
 
 public class VirtualMachine {
 
-    public static boolean executeInsert(Statement statement, Table table) 
-        throws IOException
-    {
+    public static boolean executeInsert(Statement statement, Table table) throws IOException {
+        System.out.println("Executing INSERT operation");
         Row rowToInsert = statement.getRowToInsert();
-        BTree<Integer, Row> bTree = table.getBTree(); // Assume Table now has a BTree
-
+        System.out.println("Row to insert: " + rowToInsert);
+        BTree<Integer, Row> bTree = table.getBTree();
+    
         // Insert into B-tree
         bTree.insert(rowToInsert.getId(), rowToInsert);
+        System.out.println("Row inserted into B-Tree");
         
         // Save B-tree to disk
+        table.saveBTreeToDisk();
         bTree.saveToDisk();
+        
+        System.out.println("B-Tree saved to disk");
         
         return true;
     }
 
-    public static void executeSelect(Table table) 
-        throws IOException
-    {
+    public static void executeSelect(Table table) throws IOException {
+        System.out.println("Executing SELECT operation");
         Cursor cursor = table.start();
-
-        while (!cursor.isEndOfTable()) {
+        if (cursor == null) {
+            System.out.println("Cursor is null, aborting SELECT operation");
+            return;
+        }
+        System.out.println("Cursor created, current key: " + cursor.getCurrentKey());
+    
+        while (cursor != null && !cursor.isEndOfTable()) {
             ByteBuffer rowBuffer = table.cursorValue(cursor);
             if (rowBuffer != null) {
                 Row row = Row.deserializeRow(rowBuffer, 0);
+                System.out.println("Retrieved row: " + row);
                 row.printRow();
+            } else {
+                System.out.println("Row buffer is NULL for key: " + cursor.getCurrentKey());
             }
+    
             cursor.advance();
+            System.out.println("Advanced cursor. New key: " + cursor.getCurrentKey());
         }
-    }  
+        
+        System.out.println("SELECT operation completed");
+    }
 
     public void executeStatement(Statement statement, Table table) 
         throws IOException

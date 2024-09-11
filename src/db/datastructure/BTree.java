@@ -238,19 +238,24 @@ public class BTree<K extends Comparable<K>, V> {
     }
 
     public K getMinKey() {
-        if (root == null) 
-        { return null; }
-
+        if (root == null || root.getSize() == 0) {
+            System.out.println("B-Tree is empty");
+            return null;
+        }
         return getMinKey(root);
     }
-
+    
     private K getMinKey(BTreeNode<K, V> node) {
-        if (node.isLeaf()) 
-        { return node.getKey(0); }
-
+        if (node.isLeaf()) {
+            if (node.getSize() == 0) {
+                System.out.println("Leaf node is empty");
+                return null;
+            }
+            return node.getKey(0);
+        }
         return getMinKey(node.getChild(0));
     }
-
+    
     public K getMaxKey() {
         if (root == null) 
         { return null; }
